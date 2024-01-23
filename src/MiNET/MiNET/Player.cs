@@ -33,10 +33,8 @@ using System.Linq;
 using System.Net;
 using System.Numerics;
 using System.Threading;
-using System.Transactions;
 using fNbt;
 using log4net;
-using Microsoft.IO;
 using MiNET.Blocks;
 using MiNET.Crafting;
 using MiNET.Effects;
@@ -1210,6 +1208,48 @@ namespace MiNET
 					SendAbilities();
 				}
 			}
+
+			/*string BasePath = Config.GetProperty("LevelDBWorldFolder", "World").Trim();
+			if (File.Exists(BasePath + "/PlayerData/" + ClientUuid + ".json"))
+			{
+				string rDataJson = File.ReadAllText(BasePath + "/PlayerData/" + ClientUuid + ".json");
+				var prDataJson = JsonConvert.DeserializeObject<PlayerData>(rDataJson);
+				if (prDataJson.Banned)
+				{
+					Disconnect($"You have been banned from this server \n {prDataJson.BanReason}");
+				}
+			}
+			else
+			{
+				PlayerData playerData = new PlayerData();
+				List<string> InventoryData = new List<string>();
+				playerData.Name = Username;
+				playerData.UserID = ClientUuid.ToString();
+				playerData.Banned = false;
+				playerData.BanReason = "";
+				for (int i = 0; i < PlayerInventory.InventorySize; i++)
+				{
+					InventoryData.Add(Inventory.Slots[i].Name);
+				}
+				playerData.Inventory = InventoryData;
+				string pDataJson = JsonConvert.SerializeObject(playerData);
+				File.WriteAllText(BasePath + "/PlayerData/" + ClientUuid + ".json", pDataJson.ToString());
+			}*/
+
+		}
+
+		public void SavePlayerInventory()
+		{
+			List<string> pInventoryData = new List<string>();
+			string BasePath = Config.GetProperty("LevelDBWorldFolder", "World").Trim();
+			string rDataJson = File.ReadAllText(BasePath + "/PlayerData/" + ClientUuid + ".json");
+			var prDataJson = JsonConvert.DeserializeObject<PlayerData>(rDataJson);
+			for (int i = 0; i < PlayerInventory.InventorySize; i++)
+			{
+				pInventoryData.Add(Inventory.Slots[i].Name);
+			}
+			prDataJson.Inventory = pInventoryData;
+			File.WriteAllText(BasePath + "/PlayerData/" + ClientUuid + ".json", prDataJson.ToString());
 		}
 
 		public virtual void HandleMcpeRespawn(McpeRespawn message)
@@ -1901,8 +1941,6 @@ namespace MiNET
 
 		public virtual void SendCraftingRecipes()
 		{
-			//TODO: Fix crafting recipe sending.
-			
 			/*McpeCraftingData craftingData = McpeCraftingData.CreateObject();
 			craftingData.recipes = RecipeManager.Recipes;
 			SendPacket(craftingData);*/
@@ -1979,8 +2017,6 @@ namespace MiNET
 							disconnect.message = reason;
 							NetworkHandler.SendPacket(disconnect);
 						}
-
-						NetworkHandler.Close();
 						NetworkHandler = null;
 
 						IsConnected = false;
@@ -2063,12 +2099,6 @@ namespace MiNET
 
 			// Hunger management
 			if (!IsGliding) HungerManager.Move(Vector3.Distance(new Vector3(KnownPosition.X, 0, KnownPosition.Z), new Vector3(message.x, 0, message.z)));
-			
-			if(isOnGround && IsGliding){
-				IsGliding = false;
-				Height = 1.8;
-				BroadcastSetEntityData();
-			}
 
 			KnownPosition = new PlayerLocation
 			{
@@ -3442,11 +3472,8 @@ namespace MiNET
 			CurrentForm = form;
 
 			McpeModalFormRequest message = McpeModalFormRequest.CreateObject();
-			message.modalforminfo.formId = form.Id; // whatever
-			message.modalforminfo.data = form.ToJson();
-			message.modalforminfo.isData = true;
-			message.modalforminfo.isCancelReason = false;//????
-			message.modalforminfo.cancelReason = 0;
+			message.formId = form.Id;
+			message.formData = form.ToJson();
 			SendPacket(message);
 		}
 
@@ -4053,6 +4080,11 @@ namespace MiNET
 
 		public virtual void HandleMcpeLevelSoundEventV2(McpeLevelSoundEventV2 message)
 		{
+		}
+
+		public virtual void HandleMcpeSetInventoryOptions(McpeSetInventoryOptions message)
+		{
+			Log.Debug($"InventoryOptions: leftTab={message.leftTab}, rightTab={message.rightTab}, filtering={message.filtering}, inventoryLayout={message.inventoryLayout}, craftingLayout={message.craftingLayout}");
 		}
 
 	}

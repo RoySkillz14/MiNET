@@ -23,6 +23,13 @@
 
 #endregion
 
+using MiNET.BlockEntities;
+using MiNET.Items;
+using MiNET.Utils.Vectors;
+using MiNET.Worlds;
+using System;
+using System.Numerics;
+
 namespace MiNET.Blocks
 {
 	public partial class Chest : ChestBase
@@ -30,5 +37,24 @@ namespace MiNET.Blocks
 		public Chest() : base(54)
 		{
 		}
+
+		public override bool PlaceBlock(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoords)
+		{
+			var FacingDirection = ItemBlock.GetFacingDirectionFromEntity(player);
+
+			cardinalDirection = FacingDirection switch
+			{
+				5 => "east",
+				3 => "south",
+				4 => "west",
+				2 => "north",
+				_ => throw new ArgumentOutOfRangeException()
+			};
+
+			var chestBlockEntity = new ChestBlockEntity { Coordinates = Coordinates };
+			world.SetBlockEntity(chestBlockEntity);
+			return false;
+		}
+
 	}
 }

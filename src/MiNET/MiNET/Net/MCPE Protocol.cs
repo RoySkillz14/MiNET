@@ -41,13 +41,14 @@ using LongString = System.String;
 using MiNET.Utils.Metadata;
 using MiNET.Utils.Vectors;
 using MiNET.Utils.Nbt;
+using MiNET.Net;
 
 namespace MiNET.Net
 {
 	public class McpeProtocolInfo
 	{
-		public const int ProtocolVersion = 618;
-		public const string GameVersion = "1.20.30";
+		public const int ProtocolVersion = 630;
+		public const string GameVersion = "1.20.50";
 	}
 
 	public interface IMcpeMessageHandler
@@ -116,6 +117,7 @@ namespace MiNET.Net
 		void HandleMcpeEmote(McpeEmotePacket message);
 		void HandleMcpeEmoteList(McpeEmoteList message);
 		void HandleMcpePermissionRequest(McpePermissionRequest message);
+		void HandleMcpeSetInventoryOptions(McpeSetInventoryOptions message);
 	}
 
 	public interface IMcpeClientMessageHandler
@@ -1045,6 +1047,8 @@ namespace MiNET.Net
 						return McpeEmoteList.CreateObject().Decode(buffer);
 					case 0xb9:
 						return McpePermissionRequest.CreateObject().Decode(buffer);
+					case 0x133:
+						return McpeSetInventoryOptions.CreateObject().Decode(buffer);
 				}
 			}
 
@@ -1052,14 +1056,6 @@ namespace MiNET.Net
 		}
 	}
 
-	public enum AdventureFlags
-	{
-		Mayfly = 0x40,
-		Noclip = 0x80,
-		Worldbuilder = 0x100,
-		Flying = 0x200,
-		Muted = 0x400,
-	}
 	public enum CommandPermission
 	{
 		Normal = 0,
@@ -2159,6 +2155,7 @@ namespace MiNET.Net
 
 		public bool hideDisconnectReason; // = null;
 		public string message; // = null;
+		public uint failReason; // = null;
 
 		public McpeDisconnect()
 		{
@@ -2172,6 +2169,7 @@ namespace MiNET.Net
 
 			BeforeEncode();
 
+			WriteUnsignedVarInt(0); //todo
 			Write(hideDisconnectReason);
 			Write(message);
 
@@ -2187,6 +2185,7 @@ namespace MiNET.Net
 
 			BeforeDecode();
 
+			failReason = ReadUnsignedVarInt();
 			hideDisconnectReason = ReadBool();
 			message = ReadString();
 
@@ -2202,6 +2201,7 @@ namespace MiNET.Net
 
 			hideDisconnectReason=default(bool);
 			message=default(string);
+			failReason=default(int);
 		}
 
 	}
@@ -2553,6 +2553,7 @@ namespace MiNET.Net
 
 	}
 
+	//Broken packet. Todo: Somehow packet is working but need to go through all fields and find field with wrong data type.
 	public partial class McpeAddPlayer : Packet<McpeAddPlayer>
 	{
 
@@ -2595,7 +2596,7 @@ namespace MiNET.Net
 
 			Write(uuid);
 			Write(username);
-			WriteUnsignedVarLong(runtimeEntityId);
+			WriteUnsignedVarLong(runtimeEntityId); //This shouldn't be here at all.
 			Write(platformChatId);
 			Write(x);
 			Write(y);
@@ -2610,7 +2611,7 @@ namespace MiNET.Net
 			WriteUnsignedVarInt(gameType);
 			Write(metadata);
 			Write(syncdata);
-			Write(entityIdSelf);
+			Write((ulong)entityIdSelf); //This is supposed to be SignedVarLong.
 			Write(playerPermissions);
 			Write(commandPermissions);
 			Write(layers);
@@ -5034,7 +5035,7 @@ namespace MiNET.Net
 			Write(recipes);
 			Write(potionTypeRecipes);
 			Write(potionContainerRecipes);
-			Write(materialReducerRecipes);
+			WriteUnsignedVarInt(0);//0 recipes TODO fix //Write(materialReducerRecipes);
 			Write(isClean);
 
 			AfterEncode();
@@ -7622,7 +7623,8 @@ namespace MiNET.Net
 	public partial class McpeModalFormRequest : Packet<McpeModalFormRequest>
 	{
 
-		public ModalFormInfo modalforminfo; // = null;
+		public uint formId; // = null;
+		public string formData; // = null;
 
 		public McpeModalFormRequest()
 		{
@@ -7636,7 +7638,8 @@ namespace MiNET.Net
 
 			BeforeEncode();
 
-			Write(modalforminfo);
+			WriteUnsignedVarInt(formId);
+			Write(formData);
 
 			AfterEncode();
 		}
@@ -7650,7 +7653,8 @@ namespace MiNET.Net
 
 			BeforeDecode();
 
-			modalforminfo = ReadModalFormInfo();
+			formId = ReadUnsignedVarInt();
+			formData = ReadString();
 
 			AfterDecode();
 		}
@@ -7662,7 +7666,9 @@ namespace MiNET.Net
 		{
 			base.ResetPacket();
 
-			modalforminfo=default(ModalFormInfo);
+
+			formId = default(uint);
+			formData = default(string);
 		}
 
 	}
@@ -7671,7 +7677,8 @@ namespace MiNET.Net
 	{
 
 		public uint formId; // = null;
-		public string data; // = null;
+		public string data = "";
+		public byte cancelReason; // = null;
 
 		public McpeModalFormResponse()
 		{
@@ -7701,7 +7708,14 @@ namespace MiNET.Net
 			BeforeDecode();
 
 			formId = ReadUnsignedVarInt();
-			data = ReadString();
+			if (ReadBool())
+			{
+				data = ReadString();
+			}
+			if (ReadBool())
+			{
+				cancelReason = ReadByte();
+			}
 
 			AfterDecode();
 		}
@@ -7715,6 +7729,7 @@ namespace MiNET.Net
 
 			formId=default(uint);
 			data=default(string);
+			cancelReason=default(byte);
 		}
 
 	}
@@ -10787,6 +10802,63 @@ namespace MiNET.Net
 
 	}
 
+	public partial class McpeSetInventoryOptions : Packet<McpeSetInventoryOptions>
+	{
+
+		public int leftTab; // = null;
+		public int rightTab; // = null;
+		public bool filtering; // = null;
+		public int inventoryLayout; // = null;
+		public int craftingLayout; // = null;
+
+		public McpeSetInventoryOptions()
+		{
+			Id = 0x133;
+			IsMcpe = true;
+		}
+
+		protected override void EncodePacket()
+		{
+			base.EncodePacket();
+
+			BeforeEncode();
+
+			AfterEncode();
+		}
+
+		partial void BeforeEncode();
+		partial void AfterEncode();
+
+		protected override void DecodePacket()
+		{
+			base.DecodePacket();
+
+			BeforeDecode();
+
+			leftTab = ReadSignedVarInt();
+			rightTab = ReadSignedVarInt();
+			filtering = ReadBool();
+			inventoryLayout = ReadSignedVarInt();
+			craftingLayout = ReadSignedVarInt();
+
+			AfterDecode();
+		}
+
+		partial void BeforeDecode();
+		partial void AfterDecode();
+
+		protected override void ResetPacket()
+		{
+			base.ResetPacket();
+
+			leftTab = default(int);
+			rightTab = default(int);
+			filtering = default(bool);
+			inventoryLayout = default(int);
+			craftingLayout = default(int);
+
+		}
+
+	}
 
 }
-

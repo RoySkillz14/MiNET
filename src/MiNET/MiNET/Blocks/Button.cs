@@ -23,8 +23,9 @@
 
 #endregion
 
+using System;
 using System.Numerics;
-using MiNET.Utils;
+using System.Threading.Tasks;
 using MiNET.Utils.Vectors;
 using MiNET.Worlds;
 
@@ -33,7 +34,8 @@ namespace MiNET.Blocks
 	public abstract class Button : Block
 	{
 		public int TickRate { get; set; }
-
+		public static string RedstoneSignalDirection { get; set; } = "north";
+		private BlockCoordinates cord = new BlockCoordinates(0, 0, 0);
 		[StateBit] public virtual bool ButtonPressedBit { get; set; } = false;
 		[StateRange(0, 5)] public virtual int FacingDirection { get; set; } = 0;
 
@@ -49,24 +51,82 @@ namespace MiNET.Blocks
 		{
 			FacingDirection = (int) face;
 
+			RedstoneSignalDirection = face switch
+			{
+				BlockFace.North => "south",
+				BlockFace.South => "north",
+				BlockFace.West => "east",
+				BlockFace.East => "west",
+				BlockFace.Up => "down",
+				BlockFace.Down => "up",
+				_ => throw new ArgumentOutOfRangeException()
+			};
+
 			world.SetBlock(this);
 			return true;
 		}
 
 		public override bool Interact(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoord)
 		{
+			world.BroadcastSound(blockCoordinates, LevelSoundEventType.ButtonOn);
 			ButtonPressedBit = true;
 			world.SetBlock(this);
 			world.ScheduleBlockTick(this, TickRate);
+
+			if (!world.RedstoneEnabled) { return true; }
+			cord = blockCoordinates.BlockNorth();
+			if (RedstoneSignalDirection == "north")
+			{
+				cord = blockCoordinates.BlockNorth();
+			}
+			else if (RedstoneSignalDirection == "south")
+			{
+				cord = blockCoordinates.BlockSouth();
+			}
+			else if (RedstoneSignalDirection == "west")
+			{
+				cord = blockCoordinates.BlockWest();
+			}
+			else if (RedstoneSignalDirection == "east")
+			{
+				cord = blockCoordinates.BlockEast();
+			}
+			else if (RedstoneSignalDirection == "up")
+			{
+				cord = blockCoordinates.BlockUp();
+			}
+			else if (RedstoneSignalDirection == "down")
+			{
+				cord = blockCoordinates.BlockDown();
+			}
+			if (ButtonPressedBit)
+			{
+				var blockk = world.GetBlock(cord);
+				if (blockk is RedstoneLamp)
+				{
+					world.SetBlock(new LitRedstoneLamp { Coordinates = new BlockCoordinates(cord) });
+				}
+				TurnOff(world);
+			}
 			return true;
 		}
 
 		public override void OnTick(Level level, bool isRandom)
 		{
 			if (isRandom) return;
-
+			level.BroadcastSound(Coordinates, LevelSoundEventType.ButtonOff);
 			ButtonPressedBit = false;
 			level.SetBlock(this);
+		}
+
+		private async void TurnOff(Level world)
+		{
+			await Task.Delay((TickRate / 2) * 100);
+			var blockk = world.GetBlock(cord);
+			if (blockk is RedstoneLamp)
+			{
+				world.SetBlock(new RedstoneLamp { Coordinates = new BlockCoordinates(cord) });
+			}
 		}
 	}
 }

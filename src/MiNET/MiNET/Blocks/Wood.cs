@@ -22,34 +22,46 @@
 // All Rights Reserved.
 
 #endregion
-
-using MiNET.Items;
+using System;
+using System.Numerics;
 using MiNET.Utils.Vectors;
 using MiNET.Worlds;
-using System.Numerics;
 
 namespace MiNET.Blocks
 {
-	public partial class EndRod : Block
+	public partial class Wood : Block
 	{
-		public EndRod() : base(208)
+		public Wood() : base(467)
 		{
-			LightLevel = 14;
+			FuelEfficiency = 15;
+			BlastResistance = 10;
+			Hardness = 2;
+			IsFlammable = true;
 		}
 
 		public override bool PlaceBlock(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoords)
 		{
-			FacingDirection = ItemBlock.GetFacingDirectionFromEntity(player);
-			if (face == BlockFace.Up)
+			var itemInHand = player.Inventory.GetItemInHand();
+			woodType = itemInHand.Metadata switch
 			{
-				FacingDirection = 1;
-			}
-			if (face == BlockFace.Down)
-			{
-				FacingDirection = 0;
-			}
+				0 or 1 => "oak",
+				2 or 3 => "spruce",
+				4 or 5 => "birch",
+				6 or 7 => "jungle",
+				8 or 9 => "acacia",
+				10 or 11 => "dark_oak",
+				_ => throw new ArgumentOutOfRangeException()
+			};
 
+			StrippedBit = itemInHand.Metadata switch
+			{
+				1 or 3 or 5 or 7 or 9 or 11 => true,
+				_ => false
+			};
 			return false;
 		}
+
+
+
 	}
 }

@@ -56,6 +56,7 @@ namespace MiNET.Worlds
 		public Database Db { get; private set; }
 
 		public string BasePath { get; private set; }
+
 		public LevelInfoBedrock LevelInfo { get; private set; }
 		public bool IsCaching { get; } = true;
 		public bool Locked { get; set; } = false;
@@ -74,12 +75,13 @@ namespace MiNET.Worlds
 
 		public void Initialize()
 		{
-			BasePath ??= Config.GetProperty("LevelDBWorldFolder", "World").Trim();
+			BasePath ??= Config.GetProperty("WorldDirectory", "Worlds").Trim();
+			var pluginDir = Config.GetProperty("PluginDirectory", "Plugins").Trim();
 
 			var directory = new DirectoryInfo(Path.Combine(BasePath, "db"));
 
 			var levelFileName = Path.Combine(BasePath, "level.dat");
-			Log.Debug($"Loading level.dat from {levelFileName}");
+			Log.Warn($"Loading level.dat from {levelFileName}");
 			if (File.Exists(levelFileName))
 			{
 				var file = new NbtFile
@@ -98,6 +100,15 @@ namespace MiNET.Worlds
 			{
 				Log.Warn($"No level.dat found at {levelFileName}. Creating empty.");
 				LevelInfo = new LevelInfoBedrock();
+				if (!Directory.Exists(BasePath))
+				{
+					Directory.CreateDirectory(BasePath);
+				}
+				if (!Directory.Exists(pluginDir))
+				{
+					Directory.CreateDirectory(pluginDir);
+				}
+				SaveLevelInfo(LevelInfo);
 			}
 
 			// We must reuse the same DB for all providers (dimensions) in LevelDB.
@@ -381,13 +392,12 @@ namespace MiNET.Worlds
 		public int SaveChunks()
 		{
 			if (!Config.GetProperty("Save.Enabled", false)) return 0;
-
 			int count = 0;
 			try
 			{
 				lock (_chunkCache)
 				{
-					if (Dimension == Dimension.Overworld) SaveLevelInfo(LevelInfo);
+				SaveLevelInfo(LevelInfo);
 
 					foreach (ChunkColumn chunkColumn in _chunkCache.Values)
 					{
@@ -411,7 +421,7 @@ namespace MiNET.Worlds
 		{
 			levelInfo.LastPlayed = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 			string levelFileName = Path.Combine(BasePath, "level.dat");
-			Log.Debug($"Saving level.dat to {levelFileName}");
+			Log.Warn($"Saving level.dat to {levelFileName}");
 
 			NbtTag nbt = levelInfo.Serialize();
 
@@ -458,32 +468,29 @@ namespace MiNET.Worlds
 			byte[] data2D = Combine(heightBytes, chunk.biomeId);
 			Db.Put(Combine(index, 0x2D), data2D);
 
-			//// Block entities
-			//byte[] blockEntityBytes = Db.Get(Combine(index, 0x31));
-			//if (blockEntityBytes != null)
+			// Block entities
+			foreach (NbtCompound blockEntityNbt in chunk.BlockEntities.Values)
+			{
+				var nbtClone = (NbtCompound) blockEntityNbt.Clone();
+				nbtClone.Name = "";
+
+				var nbt = new NbtFile
+				{
+					BigEndian = false,
+					UseVarInt = false
+				};
+				nbt.RootTag = nbtClone;
+
+				byte[] blockEntity = nbt.SaveToBuffer(NbtCompression.None);
+				Db.Put(Combine(index, 0x31), blockEntity);
+			}
+
+			// Entities  TODO
+			//foreach ()
 			//{
-			//	var data = blockEntityBytes.AsMemory();
-
-			//	var file = new NbtFile
-			//	{
-			//		BigEndian = false,
-			//		UseVarInt = false
-			//	};
-			//	int position = 0;
-			//	do
-			//	{
-			//		position += (int) file.LoadFromStream(new MemoryStreamReader(data.Slice(position)), NbtCompression.None);
-
-			//		NbtTag blockEntityTag = file.RootTag;
-			//		int x = blockEntityTag["x"].IntValue;
-			//		int y = blockEntityTag["y"].IntValue;
-			//		int z = blockEntityTag["z"].IntValue;
-
-			//		chunkColumn.SetBlockEntity(new BlockCoordinates(x, y, z), (NbtCompound) blockEntityTag);
-			//	} while (position < data.Length);
+			//	Db.Put(Combine(index, 0x32), saveToBuffer);
 			//}
-
-			//chunk.IsDirty = false;
+			chunk.IsDirty = false;
 			chunk.NeedSave = false;
 		}
 

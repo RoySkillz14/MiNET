@@ -23,6 +23,7 @@
 
 #endregion
 
+using log4net;
 using MiNET.Items;
 using MiNET.Utils.Vectors;
 using MiNET.Worlds;
@@ -33,6 +34,7 @@ namespace MiNET.Blocks
 {
 	public partial class EndPortalFrame : Block
 	{
+		private static readonly ILog Log = LogManager.GetLogger(typeof(Block));
 		public EndPortalFrame() : base(120)
 		{
 			LightLevel = 1;
@@ -54,5 +56,22 @@ namespace MiNET.Blocks
 			};
 			return false;
 		}
+
+		public override bool Interact(Level world, Player player, BlockCoordinates blockCoordinates, BlockFace face, Vector3 faceCoord)
+		{
+			var itemInHand = player.Inventory.GetItemInHand();
+			if(itemInHand.Name == "minecraft:ender_eye")
+			{
+				EndPortalEyeBit = true;
+				world.SetBlock(this);
+			}
+			if (player.GameMode == GameMode.Survival)
+			{
+				itemInHand.Count--;
+				player.Inventory.SetInventorySlot(player.Inventory.InHandSlot, itemInHand);
+			}
+			return true;
+		}
+
 	}
 }
